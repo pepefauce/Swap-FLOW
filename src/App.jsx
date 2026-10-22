@@ -20,7 +20,7 @@ import {
   useDisconnect,
   useWriteContract
 } from 'wagmi'
-import { formatUnits, parseUnits, createPublicClient, http } from 'viem'
+import { formatUnits, parseUnits, createPublicClient, http, fallback } from 'viem'
 import { bsc } from 'wagmi/chains'
 
 const WBNB_ADDRESS = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
@@ -41,12 +41,18 @@ const FLOW_REWARD_ADDRESS = '0x48421f6da4e1d367bc1c6f4f9afa334312969638'
 const FEE_WALLET = '0x2da29b4D5297b261B4899D97Df56AE36F195f26d'
 const FEE_PERCENT = 1.3
 
+const BSC_RPC_URLS = [
+  'https://bsc-dataseed1.binance.org',
+  'https://bsc-dataseed2.binance.org',
+  'https://bsc-dataseed3.binance.org'
+]
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jsjmgucdcaubbjkeulqg.supabase.co'
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'Sb_publishable_BjYYJEbbxeZthv1_iwwiwQ_x6RubLpd'
 
 const publicClient = createPublicClient({
   chain: bsc,
-  transport: http('https://bsc-dataseed1.binance.org')
+  transport: fallback(BSC_RPC_URLS.map((url) => http(url)))
 })
 
 const TOKEN_LIST = [
@@ -67,17 +73,38 @@ const TOKEN_LIST = [
 
 const TOKEN_MAP = Object.fromEntries(TOKEN_LIST.map((token) => [token.symbol, token]))
 
-const ERC20_ABI = [{
-  constant: false,
-  inputs: [
-    { name: 'spender', type: 'address', internalType: 'address' },
-    { name: 'amount', type: 'uint256', internalType: 'uint256' }
-  ],
-  name: 'approve',
-  outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-  stateMutability: 'nonpayable',
-  type: 'function'
-}]
+const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    name: 'allowance',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    constant: true,
+    inputs: [{ name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    constant: false,
+    inputs: [
+      { name: 'spender', type: 'address', internalType: 'address' },
+      { name: 'amount', type: 'uint256', internalType: 'uint256' }
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  }
+]
 
 const PANCAKE_ROUTER_ABI = [
   {
@@ -172,6 +199,7 @@ function App() {
   const { writeContractAsync } = useWriteContract()
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
     const urlParams = new URLSearchParams(window.location.search)
     const ref = urlParams.get('ref')
     if (ref && ref.startsWith('0x')) {
@@ -197,7 +225,11 @@ function App() {
   }, [history])
 
   const { data: bnbBalance } = useBalance({ address, query: { enabled: !!address } })
-  const { data: usdtBalance } = useBalance({ address, token: USDT_ADDRESS, query: { enabled: !!address } })
+  const { data: selectedTokenBalanceData } = useBalance({
+    address,
+    token: fromToken === 'BNB' ? undefined : TOKEN_MAP[fromToken]?.address,
+    query: { enabled: !!address && fromToken !== 'BNB' }
+  })
 
   const fromConfig = TOKEN_MAP[fromToken]
   const toConfig = TOKEN_MAP[toToken]
@@ -212,6 +244,11 @@ function App() {
       return 0n
     }
   }, [amount, fromConfig.decimals])
+
+  const selectedTokenBalance = useMemo(() => {
+    if (fromToken === 'BNB') return bnbBalance?.value ?? 0n
+    return selectedTokenBalanceData?.value ?? 0n
+  }, [bnbBalance, fromToken, selectedTokenBalanceData])
 
   useEffect(() => {
     let isMounted = true
@@ -341,6 +378,9 @@ function App() {
     if (parsedAmountIn === 0n) {
       return alert('Ingresa un monto válido.')
     }
+    if (selectedTokenBalance < parsedAmountIn) {
+      return alert(`Saldo insuficiente de ${fromToken}. Revisa el monto y vuelve a intentarlo.`)
+    }
 
     setIsProcessingSwap(true)
 
@@ -349,32 +389,44 @@ function App() {
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200)
       const cleanBonus = Number(bonusFlow || 0).toFixed(2)
 
+      if (fromToken !== 'BNB') {
+        const allowance = await publicClient.readContract({
+          address: fromConfig.address,
+          abi: ERC20_ABI,
+          functionName: 'allowance',
+          args: [address, PANCAKE_ROUTER_ADDRESS]
+        })
+
+        if (allowance < parsedAmountIn) {
+          const approveHash = await writeContractAsync({
+            address: fromConfig.address,
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [PANCAKE_ROUTER_ADDRESS, parsedAmountIn]
+          })
+          await publicClient.waitForTransactionReceipt({ hash: approveHash })
+        }
+      }
+
+      let hash
       if (fromToken === 'BNB') {
-        const hash = await writeContractAsync({
+        hash = await writeContractAsync({
           address: PANCAKE_ROUTER_ADDRESS,
           abi: PANCAKE_ROUTER_ABI,
           functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens',
           args: [amountOutMin, route, address, deadline],
           value: parsedAmountIn
         })
-        await publicClient.waitForTransactionReceipt({ hash })
       } else {
-        const approveHash = await writeContractAsync({
-          address: fromConfig.address,
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [PANCAKE_ROUTER_ADDRESS, parsedAmountIn]
-        })
-        await publicClient.waitForTransactionReceipt({ hash: approveHash })
-
-        const swapHash = await writeContractAsync({
+        hash = await writeContractAsync({
           address: PANCAKE_ROUTER_ADDRESS,
           abi: PANCAKE_ROUTER_ABI,
           functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
           args: [parsedAmountIn, amountOutMin, route, address, deadline]
         })
-        await publicClient.waitForTransactionReceipt({ hash: swapHash })
       }
+
+      await publicClient.waitForTransactionReceipt({ hash })
 
       try {
         await fetch(`${SUPABASE_URL}/functions/v1/process-swap-reward`, {
@@ -417,6 +469,11 @@ function App() {
   }
 
   const tokenBalance = bnbBalance ? Number(formatUnits(bnbBalance.value, 18)).toFixed(3) : '0.000'
+  const selectedTokenDisplay = fromToken === 'BNB'
+    ? tokenBalance
+    : selectedTokenBalanceData
+      ? Number(formatUnits(selectedTokenBalanceData.value, fromConfig.decimals)).toFixed(3)
+      : '0.000'
   const usdtDisplay = usdtBalance ? Number(formatUnits(usdtBalance.value, 18)).toFixed(2) : '0.00'
 
   return (
@@ -451,8 +508,8 @@ function App() {
             ) : (
               <div className="grid grid-cols-3 gap-1.5 w-full">
                 <div className="rounded-lg border border-white/10 bg-white/5 p-1 text-center">
-                  <span className="text-slate-400 block text-[8px]">BNB</span>
-                  <span className="font-semibold block text-[10px] truncate">{tokenBalance}</span>
+                  <span className="text-slate-400 block text-[8px]">{fromToken}</span>
+                  <span className="font-semibold block text-[10px] truncate">{selectedTokenDisplay}</span>
                 </div>
 
                 <div className="rounded-lg border border-white/10 bg-white/5 p-1 text-center">
