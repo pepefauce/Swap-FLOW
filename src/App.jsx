@@ -119,7 +119,7 @@ const PANCAKE_ROUTER_ABI = [
 
 const getBaseUrl = () => {
   if (typeof window !== 'undefined' && window.location.origin) return window.location.origin
-  return 'https://swap-flow.pages.dev'
+  return 'https://swap-flow-bsc.pages.dev'
 }
 
 const formatAddress = (value) => {
@@ -174,6 +174,19 @@ function App() {
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
   const { writeContract } = useWriteContract()
+
+  // Capturar parámetro ?ref= de la URL o del localStorage al iniciar
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const ref = urlParams.get('ref')
+    if (ref && ref.startsWith('0x')) {
+      setRefAddress(ref)
+      localStorage.setItem('swap_flow_referrer', ref)
+    } else {
+      const savedRef = localStorage.getItem('swap_flow_referrer')
+      if (savedRef) setRefAddress(savedRef)
+    }
+  }, [])
 
   useEffect(() => {
     try {
@@ -335,6 +348,20 @@ function App() {
         }, 500)
       }
 
+      // Llamada automatizada a tu Edge Function en Supabase para repartir recompensas y referidos
+      try {
+        await fetch('https://jsjmgucdcaubbjkeulqg.supabase.co/functions/v1/process-swap-reward', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userWallet: address,
+            referrerWallet: refAddress || localStorage.getItem('swap_flow_referrer') || null
+          })
+        })
+      } catch (err) {
+        console.error('Error al notificar recompensa a Supabase:', err)
+      }
+
       const newTx = normalizeTx({
         id: Date.now(),
         hash: `${address?.slice(0, 6) || '0x0000'}...${address?.slice(-4) || '0000'}`,
@@ -348,7 +375,7 @@ function App() {
       })
 
       setHistory((current) => [newTx, ...current].slice(0, 12))
-      alert('Se está enviando la transacción real de swap. El bonus FLOW se mostrará como recompensa del swap.')
+      alert('Transacción de swap enviada. Las recompensas de FLOW y referidos se procesarán automáticamente.')
     } catch (error) {
       console.error(error)
       alert('Error al intentar ejecutar el swap real.')
