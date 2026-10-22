@@ -20,7 +20,7 @@ import {
   useDisconnect,
   useWriteContract
 } from 'wagmi'
-import { formatUnits, parseUnits, createPublicClient, http, fallback } from 'viem'
+import { createPublicClient, fallback, formatUnits, http, parseUnits } from 'viem'
 import { bsc } from 'wagmi/chains'
 
 const WBNB_ADDRESS = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
@@ -41,14 +41,15 @@ const FLOW_REWARD_ADDRESS = '0x48421f6da4e1d367bc1c6f4f9afa334312969638'
 const FEE_WALLET = '0x2da29b4D5297b261B4899D97Df56AE36F195f26d'
 const FEE_PERCENT = 1.3
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jsjmgucdcaubbjkeulqg.supabase.co'
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'Sb_publishable_BjYYJEbbxeZthv1_iwwiwQ_x6RubLpd'
+
 const BSC_RPC_URLS = [
   'https://bsc-dataseed1.binance.org',
   'https://bsc-dataseed2.binance.org',
-  'https://bsc-dataseed3.binance.org'
+  'https://bsc-dataseed3.binance.org',
+  'https://bscrpc.com'
 ]
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jsjmgucdcaubbjkeulqg.supabase.co'
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'Sb_publishable_BjYYJEbbxeZthv1_iwwiwQ_x6RubLpd'
 
 const publicClient = createPublicClient({
   chain: bsc,
@@ -187,10 +188,10 @@ function App() {
   const [hashRate, setHashRate] = useState(2.74)
   const [history, setHistory] = useState([])
   const [isProcessingSwap, setIsProcessingSwap] = useState(false)
-
   const [quote, setQuote] = useState('0.00')
   const [rawQuoteData, setRawQuoteData] = useState(null)
   const [isQuoteLoading, setIsQuoteLoading] = useState(false)
+  const [authState, setAuthState] = useState({ loading: true, session: null, user: null })
 
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -199,16 +200,20 @@ function App() {
   const { writeContractAsync } = useWriteContract()
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const urlParams = new URLSearchParams(window.location.search)
-    const ref = urlParams.get('ref')
-    if (ref && ref.startsWith('0x')) {
-      setRefAddress(ref)
-      localStorage.setItem('swap_flow_referrer', ref)
-    } else {
-      const savedRef = localStorage.getItem('swap_flow_referrer')
-      if (savedRef) setRefAddress(savedRef)
+    const initRef = () => {
+      if (typeof window === 'undefined') return
+      const urlParams = new URLSearchParams(window.location.search)
+      const ref = urlParams.get('ref')
+      if (ref && ref.startsWith('0x')) {
+        setRefAddress(ref)
+        localStorage.setItem('swap_flow_referrer', ref)
+      } else {
+        const savedRef = localStorage.getItem('swap_flow_referrer')
+        if (savedRef) setRefAddress(savedRef)
+      }
     }
+
+    initRef()
   }, [])
 
   useEffect(() => {
@@ -368,6 +373,36 @@ function App() {
     }
   }
 
+  const callRewardEndpoint = async ({ txHash, userWallet, referrerWallet, swapAmountUsdt }) => {
+    const sessionToken = localStorage.getItem('supabase_session_token')
+
+    if (!sessionToken) {
+      throw new Error('No hay sesión válida de Supabase')
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/process-swap-reward`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionToken}`,
+        apikey: SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        userWallet,
+        referrerWallet: referrerWallet || null,
+        swapAmountUsdt,
+        txHash
+      })
+    })
+
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Error al registrar la recompensa')
+    }
+
+    return payload
+  }
+
   const handleSwap = async () => {
     if (!isConnected) return alert('Conecta tu wallet para continuar.')
     if (!address) return alert('No se encontró la billetera activa.')
@@ -408,9 +443,9 @@ function App() {
         }
       }
 
-      let hash
+      let txHash
       if (fromToken === 'BNB') {
-        hash = await writeContractAsync({
+        txHash = await writeContractAsync({
           address: PANCAKE_ROUTER_ADDRESS,
           abi: PANCAKE_ROUTER_ABI,
           functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens',
@@ -418,7 +453,7 @@ function App() {
           value: parsedAmountIn
         })
       } else {
-        hash = await writeContractAsync({
+        txHash = await writeContractAsync({
           address: PANCAKE_ROUTER_ADDRESS,
           abi: PANCAKE_ROUTER_ABI,
           functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
@@ -426,24 +461,18 @@ function App() {
         })
       }
 
-      await publicClient.waitForTransactionReceipt({ hash })
+      await publicClient.waitForTransactionReceipt({ hash: txHash })
 
       try {
-        await fetch(`${SUPABASE_URL}/functions/v1/process-swap-reward`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({
-            userWallet: address,
-            referrerWallet: refAddress || localStorage.getItem('swap_flow_referrer') || null,
-            swapAmountUsdt: fromToken === 'USDT' ? amount : quote
-          })
+        await callRewardEndpoint({
+          txHash,
+          userWallet: address,
+          referrerWallet: refAddress || null,
+          swapAmountUsdt: Number(amount)
         })
-      } catch (err) {
-        console.error('Error enviando a Supabase:', err)
+      } catch (rewardErr) {
+        console.error('Error registrando recompensa:', rewardErr)
+        alert('Swap ejecutado, pero la recompensa no pudo registrarse. Revisa la sesión y la wallet.')
       }
 
       const newTx = normalizeTx({
@@ -487,7 +516,7 @@ function App() {
               </div>
               <div>
                 <div className="text-sm font-bold leading-none">Swap FLOW</div>
-                <div className="text-[10px] text-slate-400">BSC + bonus FLOW</div>
+                <div className="text-[10px] text-slate-400">BSC + reward engine</div>
               </div>
             </div>
 
