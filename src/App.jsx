@@ -44,19 +44,40 @@ const FLOW_REWARD_ADDRESS = '0x48421f6da4e1d367bc1c6f4f9afa334312969638'
 const FEE_WALLET = '0x2da29b4D5297b261B4899D97Df56AE36F195f26d'
 const FEE_PERCENT = 1.3
 
-const ERC20_ABI = [
-  {
-    constant: false,
-    inputs: [
-      { internalType: 'address', name: 'spender', type: 'address' },
-      { internalType: 'uint256', name: 'amount', type: 'uint256' }
-    ],
-    name: 'approve',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    stateMutability: 'nonpayable',
-    type: 'function'
-  }
+const TOKEN_LIST = [
+  { symbol: 'BNB', address: WBNB_ADDRESS, decimals: 18 },
+  { symbol: 'USDT', address: USDT_ADDRESS, decimals: 18 },
+  { symbol: 'BUSD', address: BUSD_ADDRESS, decimals: 18 },
+  { symbol: 'USDC', address: USDC_ADDRESS, decimals: 18 },
+  { symbol: 'ETH', address: ETH_ADDRESS, decimals: 18 },
+  { symbol: 'BTCB', address: BTCB_ADDRESS, decimals: 18 },
+  { symbol: 'ADA', address: ADA_ADDRESS, decimals: 18 },
+  { symbol: 'DOGE', address: DOGE_ADDRESS, decimals: 18 },
+  { symbol: 'CAKE', address: CAKE_ADDRESS, decimals: 18 },
+  { symbol: 'LINK', address: LINK_ADDRESS, decimals: 18 },
+  { symbol: 'XRP', address: XRP_ADDRESS, decimals: 18 },
+  { symbol: 'SOL', address: SOL_ADDRESS, decimals: 18 },
+  { symbol: 'LTC', address: LTC_ADDRESS, decimals: 18 }
 ]
+
+const TOKEN_MAP = Object.fromEntries(TOKEN_LIST.map((token) => [token.symbol, token]))
+const STABLES = {
+  USDT: USDT_ADDRESS,
+  BUSD: BUSD_ADDRESS,
+  USDC: USDC_ADDRESS
+}
+
+const ERC20_ABI = [{
+  constant: false,
+  inputs: [
+    { name: 'spender', type: 'address', internalType: 'address' },
+    { name: 'amount', type: 'uint256', internalType: 'uint256' }
+  ],
+  name: 'approve',
+  outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+  stateMutability: 'nonpayable',
+  type: 'function'
+}]
 
 const PANCAKE_ROUTER_ABI = [
   {
@@ -96,28 +117,8 @@ const PANCAKE_ROUTER_ABI = [
   }
 ]
 
-const TOKEN_LIST = [
-  { symbol: 'BNB', address: WBNB_ADDRESS, decimals: 18, isNative: true },
-  { symbol: 'USDT', address: USDT_ADDRESS, decimals: 18 },
-  { symbol: 'BUSD', address: BUSD_ADDRESS, decimals: 18 },
-  { symbol: 'USDC', address: USDC_ADDRESS, decimals: 18 },
-  { symbol: 'ETH', address: ETH_ADDRESS, decimals: 18 },
-  { symbol: 'BTCB', address: BTCB_ADDRESS, decimals: 18 },
-  { symbol: 'ADA', address: ADA_ADDRESS, decimals: 18 },
-  { symbol: 'DOGE', address: DOGE_ADDRESS, decimals: 18 },
-  { symbol: 'CAKE', address: CAKE_ADDRESS, decimals: 18 },
-  { symbol: 'LINK', address: LINK_ADDRESS, decimals: 18 },
-  { symbol: 'XRP', address: XRP_ADDRESS, decimals: 18 },
-  { symbol: 'SOL', address: SOL_ADDRESS, decimals: 18 },
-  { symbol: 'LTC', address: LTC_ADDRESS, decimals: 18 }
-]
-
-const TOKEN_MAP = Object.fromEntries(TOKEN_LIST.map((token) => [token.symbol, token]))
-
 const getBaseUrl = () => {
-  if (typeof window !== 'undefined' && window.location.origin) {
-    return window.location.origin
-  }
+  if (typeof window !== 'undefined' && window.location.origin) return window.location.origin
   return 'https://swap-flow.pages.dev'
 }
 
@@ -126,31 +127,38 @@ const formatAddress = (value) => {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
-const getBestRoute = (fromSymbol, toSymbol) => {
-  const from = TOKEN_MAP[fromSymbol]
-  const to = TOKEN_MAP[toSymbol]
+const buildRoute = (fromSymbol, toSymbol) => {
+  if (fromSymbol === toSymbol) return []
 
-  if (!from || !to || from.address === to.address) return null
+  const fromToken = TOKEN_MAP[fromSymbol]
+  const toToken = TOKEN_MAP[toSymbol]
+  if (!fromToken || !toToken) return []
 
-  const candidates = [
-    [from.address, to.address],
-    [from.address, WBNB_ADDRESS, to.address],
-    [from.address, USDT_ADDRESS, to.address],
-    [from.address, BUSD_ADDRESS, to.address],
-    [from.address, USDC_ADDRESS, to.address]
-  ]
+  if (fromSymbol === 'BNB') return [WBNB_ADDRESS, toToken.address]
+  if (toSymbol === 'BNB') return [fromToken.address, WBNB_ADDRESS]
 
-  const shouldUseNativeRoute = from.symbol === 'BNB' || to.symbol === 'BNB'
-
-  if (shouldUseNativeRoute) {
-    return [
-      from.symbol === 'BNB' ? WBNB_ADDRESS : from.address,
-      to.symbol === 'BNB' ? WBNB_ADDRESS : to.address
-    ]
+  if (STABLES[fromSymbol] && STABLES[toSymbol]) {
+    return [fromToken.address, toToken.address]
   }
 
-  return candidates[0]
+  if (STABLES[fromSymbol] || STABLES[toSymbol]) {
+    return [fromToken.address, toToken.address]
+  }
+
+  return [fromToken.address, WBNB_ADDRESS, toToken.address]
 }
+
+const normalizeTx = (tx) => ({
+  id: tx.id || Date.now() + Math.random(),
+  hash: tx.hash || '0x0000...0000',
+  type: tx.type || 'Swap',
+  amount: tx.amount || '0.00',
+  status: tx.status || 'Pendiente',
+  time: tx.time || 'Ahora mismo',
+  fromToken: tx.fromToken || 'BNB',
+  toToken: tx.toToken || 'USDT',
+  bonusFlow: tx.bonusFlow || '0.00'
+})
 
 function App() {
   const [tab, setTab] = useState('swap')
@@ -159,6 +167,7 @@ function App() {
   const [toToken, setToToken] = useState('USDT')
   const [refAddress, setRefAddress] = useState('')
   const [hashRate, setHashRate] = useState(2.74)
+  const [history, setHistory] = useState([])
 
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -166,19 +175,30 @@ function App() {
   const { disconnect } = useDisconnect()
   const { writeContract } = useWriteContract()
 
-  const { data: bnbBalance } = useBalance({
-    address,
-    query: { enabled: !!address }
-  })
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('swap-flow-history')
+      if (saved) {
+        setHistory(JSON.parse(saved).map(normalizeTx))
+      }
+    } catch {
+      setHistory([])
+    }
+  }, [])
 
-  const { data: usdtBalance } = useBalance({
-    address,
-    token: USDT_ADDRESS,
-    query: { enabled: !!address }
-  })
+  useEffect(() => {
+    if (history.length) {
+      localStorage.setItem('swap-flow-history', JSON.stringify(history))
+    }
+  }, [history])
 
+  const { data: bnbBalance } = useBalance({ address, query: { enabled: !!address } })
+  const { data: usdtBalance } = useBalance({ address, token: USDT_ADDRESS, query: { enabled: !!address } })
+
+  const isBsc = chainId === bsc.id
   const fromConfig = TOKEN_MAP[fromToken]
   const toConfig = TOKEN_MAP[toToken]
+  const route = useMemo(() => buildRoute(fromToken, toToken), [fromToken, toToken])
 
   const parsedAmountIn = useMemo(() => {
     if (!amount || Number(amount) <= 0 || !Number.isFinite(Number(amount))) return 0n
@@ -189,18 +209,12 @@ function App() {
     }
   }, [amount, fromConfig.decimals])
 
-  const route = useMemo(() => {
-    return getBestRoute(fromToken, toToken)
-  }, [fromToken, toToken])
-
   const { data: quoteData, isLoading: isQuoteLoading } = useReadContract({
     address: PANCAKE_ROUTER_ADDRESS,
     abi: PANCAKE_ROUTER_ABI,
     functionName: 'getAmountsOut',
-    args: [parsedAmountIn, route || []],
-    query: {
-      enabled: !!route && parsedAmountIn > 0n && chainId === bsc.id
-    }
+    args: [parsedAmountIn, route],
+    query: { enabled: isBsc && route.length > 0 && parsedAmountIn > 0n }
   })
 
   const quote = useMemo(() => {
@@ -224,7 +238,17 @@ function App() {
     return `${base}?ref=${ref}`
   }, [address])
 
-  const isBsc = chainId === bsc.id
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setHashRate((current) => {
+        const delta = (Math.random() - 0.5) * 0.12
+        const next = Number((current + delta).toFixed(2))
+        return Math.max(1.8, Math.min(4.2, next))
+      })
+    }, 1200)
+
+    return () => clearInterval(interval)
+  }, [])
 
   const handleConnect = () => {
     const connector = connectors.find((item) => item.name === 'MetaMask') || connectors[0]
@@ -244,52 +268,87 @@ function App() {
     }
   }
 
-  const handleSwap = () => {
+  const handleImportToken = async () => {
+    if (!window.ethereum) {
+      alert('No se detectó una wallet compatible.')
+      return
+    }
+
+    try {
+      await window.ethereum.request({
+        method: 'wallet_watchAsset',
+        params: {
+          type: 'ERC20',
+          options: {
+            address: FLOW_REWARD_ADDRESS,
+            symbol: 'FLOW',
+            decimals: 18,
+            image: 'https://raw.githubusercontent.com/ethereum-optimism/brand-kit/main/assets/icon.png'
+          }
+        }
+      })
+    } catch (error) {
+      console.error(error)
+      alert('La wallet rechazó la importación del token.')
+    }
+  }
+
+  const handleSwap = async () => {
     if (!isConnected) {
       alert('Conecta tu wallet para continuar.')
       return
     }
 
-    if (!route || !quoteData || quoteData.length < 2) {
-      alert('No existe una ruta real de intercambio para estos tokens en esta red.')
+    if (!route || route.length === 0 || !quoteData || quoteData.length < 2) {
+      alert('No hay una ruta real disponible para este intercambio en PancakeSwap.')
       return
     }
 
-    const toAddress = toConfig.address
-    const path = route
-
     try {
+      const amountOutMin = (quoteData[quoteData.length - 1] * 995n) / 1000n
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200)
+      const cleanBonus = Number(bonusFlow || 0).toFixed(2)
+
       if (fromToken === 'BNB') {
-        const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200)
-        const amountOutMin = (quoteData[quoteData.length - 1] * 995n) / 1000n
         writeContract({
           address: PANCAKE_ROUTER_ADDRESS,
           abi: PANCAKE_ROUTER_ABI,
           functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens',
-          args: [amountOutMin, path, address, deadline],
+          args: [amountOutMin, route, address, deadline],
           value: parsedAmountIn
         })
-        return
+      } else {
+        writeContract({
+          address: fromConfig.address,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [PANCAKE_ROUTER_ADDRESS, parsedAmountIn]
+        })
+
+        setTimeout(() => {
+          writeContract({
+            address: PANCAKE_ROUTER_ADDRESS,
+            abi: PANCAKE_ROUTER_ABI,
+            functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
+            args: [parsedAmountIn, amountOutMin, route, address, deadline]
+          })
+        }, 500)
       }
 
-      const amountOutMin = (quoteData[quoteData.length - 1] * 995n) / 1000n
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200)
-
-      writeContract({
-        address: fromConfig.address,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [PANCAKE_ROUTER_ADDRESS, parsedAmountIn]
+      const newTx = normalizeTx({
+        id: Date.now(),
+        hash: `${address?.slice(0, 6) || '0x0000'}...${address?.slice(-4) || '0000'}`,
+        type: `Swap ${fromToken}→${toToken}`,
+        amount: `${quote} ${toToken}`,
+        status: 'Pendiente',
+        time: 'Ahora mismo',
+        fromToken,
+        toToken,
+        bonusFlow: cleanBonus
       })
 
-      setTimeout(() => {
-        writeContract({
-          address: PANCAKE_ROUTER_ADDRESS,
-          abi: PANCAKE_ROUTER_ABI,
-          functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
-          args: [parsedAmountIn, amountOutMin, path, address, deadline]
-        })
-      }, 500)
+      setHistory((current) => [newTx, ...current].slice(0, 12))
+      alert('Se está enviando la transacción real de swap. El bonus FLOW se mostrará como recompensa del swap.')
     } catch (error) {
       console.error(error)
       alert('Error al intentar ejecutar el swap real.')
@@ -309,25 +368,8 @@ function App() {
     await handleCopy(referralLink)
   }
 
-  const tokenBalance = bnbBalance
-    ? Number(formatUnits(bnbBalance.value, 18)).toFixed(3)
-    : '0.000'
-
-  const usdtDisplay = usdtBalance
-    ? Number(formatUnits(usdtBalance.value, 18)).toFixed(2)
-    : '0.00'
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setHashRate((current) => {
-        const delta = (Math.random() - 0.5) * 0.12
-        const next = Number((current + delta).toFixed(2))
-        return Math.max(1.8, Math.min(4.2, next))
-      })
-    }, 1200)
-
-    return () => clearInterval(interval)
-  }, [])
+  const tokenBalance = bnbBalance ? Number(formatUnits(bnbBalance.value, 18)).toFixed(3) : '0.000'
+  const usdtDisplay = usdtBalance ? Number(formatUnits(usdtBalance.value, 18)).toFixed(2) : '0.00'
 
   return (
     <div className="min-h-screen bg-bg text-white">
@@ -339,7 +381,7 @@ function App() {
             </div>
             <div>
               <div className="text-xl font-bold">Swap FLOW</div>
-              <div className="text-xs text-slate-400">BSC Multi-token</div>
+              <div className="text-xs text-slate-400">BSC real + bonus FLOW</div>
             </div>
           </div>
 
@@ -507,7 +549,7 @@ function App() {
 
                   <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-sm text-cyan-100">
                     <div className="flex items-center justify-between">
-                      <span>FLOW como bono</span>
+                      <span>Bonus FLOW</span>
                       <span className="font-semibold">{bonusFlow} FLOW</span>
                     </div>
                     <div className="mt-1 text-xs text-cyan-200/80">FLOW no forma parte del trading principal; se entrega como recompensa.</div>
@@ -582,21 +624,30 @@ function App() {
                     </div>
 
                     <div className="space-y-3">
-                      {[{ hash: '0x9e8f…fa25', type: 'Swap BNB→USDT', amount: '0.82 USDT', status: 'Confirmado', time: 'Hace 2 min' }, { hash: '0x7c0f…8b74', type: 'Swap USDT→BUSD', amount: '11.40 BUSD', status: 'Aprobado', time: 'Hace 11 min' }].map((tx, index) => (
-                        <div key={`${tx.hash}-${index}`} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <div className="font-medium">{tx.type}</div>
-                              <div className="text-xs text-slate-400">{tx.hash}</div>
+                      {history.length === 0 ? (
+                        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
+                          Aún no hay transacciones guardadas localmente.
+                        </div>
+                      ) : (
+                        history.map((tx) => (
+                          <div key={tx.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="font-medium">{tx.type}</div>
+                                <div className="text-xs text-slate-400">{tx.hash}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-semibold text-emerald-300">{tx.amount}</div>
+                                <div className="text-xs text-slate-400">{tx.status}</div>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <div className="font-semibold text-emerald-300">{tx.amount}</div>
-                              <div className="text-xs text-slate-400">{tx.status}</div>
+                            <div className="mt-2 flex justify-between text-xs text-slate-500">
+                              <span>{tx.time}</span>
+                              <span>Bonus {tx.bonusFlow} FLOW</span>
                             </div>
                           </div>
-                          <div className="mt-2 text-xs text-slate-500">{tx.time}</div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -632,10 +683,12 @@ function App() {
                 </button>
               </div>
 
-              <div className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-sm text-cyan-100">
-                <div className="font-medium">Bonificación</div>
-                <div className="mt-1 text-2xl font-bold">{bonusFlow} FLOW</div>
-              </div>
+              <button
+                onClick={handleImportToken}
+                className="mt-4 w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-500 px-4 py-3 font-medium transition hover:brightness-110"
+              >
+                Importar FLOW a la wallet
+              </button>
             </div>
 
             <div className="card p-4">
@@ -663,7 +716,7 @@ function App() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Ruta</span>
-                  <span className="font-medium text-emerald-300">{route ? route.join(' → ') : 'No disponible'}</span>
+                  <span className="font-medium text-emerald-300">{route && route.length ? route.join(' → ') : 'No disponible'}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Recaudación</span>
