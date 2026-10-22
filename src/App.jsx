@@ -44,7 +44,6 @@ const FEE_PERCENT = 1.3
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jsjmgucdcaubbjkeulqg.supabase.co'
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'Sb_publishable_BjYYJEbbxeZthv1_iwwiwQ_x6RubLpd'
 
-// PUBLIC CLIENT GARANTIZADO CON RPC DIRECTO A LA BSC
 const publicClient = createPublicClient({
   chain: bsc,
   transport: http('https://bsc-dataseed1.binance.org')
@@ -160,8 +159,8 @@ function App() {
   const [refAddress, setRefAddress] = useState('')
   const [hashRate, setHashRate] = useState(2.74)
   const [history, setHistory] = useState([])
-  
-  // ESTADOS DIRECTOS PARA LA COTIZACIÓN
+  const [isProcessingSwap, setIsProcessingSwap] = useState(false)
+
   const [quote, setQuote] = useState('0.00')
   const [rawQuoteData, setRawQuoteData] = useState(null)
   const [isQuoteLoading, setIsQuoteLoading] = useState(false)
@@ -170,7 +169,7 @@ function App() {
   const chainId = useChainId()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
-  const { writeContract } = useWriteContract()
+  const { writeContractAsync } = useWriteContract()
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -214,7 +213,6 @@ function App() {
     }
   }, [amount, fromConfig.decimals])
 
-  // LECTURA DIRECTA ON-CHAIN
   useEffect(() => {
     let isMounted = true
 
@@ -256,15 +254,11 @@ function App() {
     }
 
     fetchQuote()
-    const timer = setInterval(fetchQuote, 4000)
-
     return () => {
       isMounted = false
-      clearInterval(timer)
     }
   }, [parsedAmountIn, route, toConfig.decimals])
 
-  // CÁLCULO RECOMPENSA: 300 FLOW x 1 USDT
   const bonusFlow = useMemo(() => {
     const inputNum = Number(amount || 0)
     if (inputNum <= 0) return '0.00'
@@ -339,9 +333,16 @@ function App() {
 
   const handleSwap = async () => {
     if (!isConnected) return alert('Conecta tu wallet para continuar.')
+    if (!address) return alert('No se encontró la billetera activa.')
+    if (chainId !== bsc.id) return alert('Cambia tu wallet a Binance Smart Chain (BSC) para continuar.')
     if (!route || route.length === 0 || !rawQuoteData || rawQuoteData.length < 2) {
       return alert('No hay ruta disponible para esta cotización.')
     }
+    if (parsedAmountIn === 0n) {
+      return alert('Ingresa un monto válido.')
+    }
+
+    setIsProcessingSwap(true)
 
     try {
       const amountOutMin = (rawQuoteData[rawQuoteData.length - 1] * 990n) / 1000n
@@ -349,29 +350,30 @@ function App() {
       const cleanBonus = Number(bonusFlow || 0).toFixed(2)
 
       if (fromToken === 'BNB') {
-        writeContract({
+        const hash = await writeContractAsync({
           address: PANCAKE_ROUTER_ADDRESS,
           abi: PANCAKE_ROUTER_ABI,
           functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens',
           args: [amountOutMin, route, address, deadline],
           value: parsedAmountIn
         })
+        await publicClient.waitForTransactionReceipt({ hash })
       } else {
-        writeContract({
+        const approveHash = await writeContractAsync({
           address: fromConfig.address,
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [PANCAKE_ROUTER_ADDRESS, parsedAmountIn]
         })
+        await publicClient.waitForTransactionReceipt({ hash: approveHash })
 
-        setTimeout(() => {
-          writeContract({
-            address: PANCAKE_ROUTER_ADDRESS,
-            abi: PANCAKE_ROUTER_ABI,
-            functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
-            args: [parsedAmountIn, amountOutMin, route, address, deadline]
-          })
-        }, 800)
+        const swapHash = await writeContractAsync({
+          address: PANCAKE_ROUTER_ADDRESS,
+          abi: PANCAKE_ROUTER_ABI,
+          functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
+          args: [parsedAmountIn, amountOutMin, route, address, deadline]
+        })
+        await publicClient.waitForTransactionReceipt({ hash: swapHash })
       }
 
       try {
@@ -379,8 +381,8 @@ function App() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({
             userWallet: address,
@@ -405,10 +407,12 @@ function App() {
       })
 
       setHistory((current) => [newTx, ...current].slice(0, 12))
-      alert('Transacción de swap enviada.')
+      alert('Transacción de swap enviada correctamente.')
     } catch (error) {
       console.error(error)
-      alert('Error ejecutando el swap.')
+      alert('Error ejecutando el swap. Revisa que la wallet esté en BSC y que el monto sea válido.')
+    } finally {
+      setIsProcessingSwap(false)
     }
   }
 
@@ -418,8 +422,6 @@ function App() {
   return (
     <div className="min-h-screen bg-bg text-white w-full overflow-x-hidden">
       <div className="w-full max-w-md mx-auto px-3 py-4 box-border">
-        
-        {/* HEADER COMPACTO MÓVIL */}
         <header className="card mb-3 p-3 w-full box-border">
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
@@ -469,7 +471,6 @@ function App() {
           </div>
         </header>
 
-        {/* NAVEGACIÓN Y CONTENIDO */}
         <main className="space-y-3 w-full box-border">
           <div className="card p-3 w-full box-border">
             <div className="mb-3 flex items-center justify-between">
@@ -489,11 +490,8 @@ function App() {
               <div className="text-[10px] text-slate-400">No custodio</div>
             </div>
 
-            {/* TAB: SWAP */}
             {tab === 'swap' && (
               <div className="space-y-3 w-full">
-                
-                {/* MINERO VIRTUAL VISIBLE */}
                 <div className="glass p-3 w-full box-border">
                   <div className="mb-1.5 flex items-center justify-between">
                     <div className="text-[11px] text-slate-400 font-medium">Minero virtual</div>
@@ -510,7 +508,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* CAJA DE SELECCIÓN Y INPUTS */}
                 <div className="glass p-3 w-full box-border">
                   <div className="grid gap-2 grid-cols-2">
                     <div>
@@ -583,7 +580,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* DETALLES DE COMISIÓN Y RECAUDACIÓN */}
                 <div className="glass p-2.5 w-full box-border text-xs">
                   <div className="flex justify-between text-slate-400 mb-1 text-[11px]">
                     <span>Fee de Mediación</span>
@@ -600,7 +596,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* RECOMPENSA DE FLOW: 300 FLOW / 1 USDT */}
                 <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-2.5 text-xs text-cyan-100">
                   <div className="flex justify-between font-semibold text-[11px]">
                     <span>Bonus FLOW Estimado</span>
@@ -611,28 +606,28 @@ function App() {
                   </div>
                 </div>
 
-                {/* BOTÓN PRINCIPAL ACCIONABLE */}
                 <button
                   onClick={handleSwap}
-                  disabled={!parsedAmountIn || isQuoteLoading || quote === '0.00'}
+                  disabled={!parsedAmountIn || isQuoteLoading || quote === '0.00' || isProcessingSwap}
                   className={`w-full rounded-xl py-2.5 font-bold text-xs text-white transition ${
-                    parsedAmountIn && !isQuoteLoading && quote !== '0.00'
+                    parsedAmountIn && !isQuoteLoading && quote !== '0.00' && !isProcessingSwap
                       ? 'bg-gradient-to-r from-emerald-600 to-cyan-500 shadow-glow hover:brightness-110'
                       : 'cursor-not-allowed bg-slate-700 opacity-60'
                   }`}
                 >
                   {!isConnected
                     ? 'Conectar billetera'
-                    : isQuoteLoading
-                      ? 'Calculando cotización...'
-                      : quote === '0.00'
-                        ? 'Ingresa un monto válido'
-                        : 'Aprobar y Ejecutar Swap'}
+                    : isProcessingSwap
+                      ? 'Procesando swap...'
+                      : isQuoteLoading
+                        ? 'Calculando cotización...'
+                        : quote === '0.00'
+                          ? 'Ingresa un monto válido'
+                          : 'Aprobar y Ejecutar Swap'}
                 </button>
               </div>
             )}
 
-            {/* TAB: REFERIDOS */}
             {tab === 'referidos' && (
               <div className="space-y-3">
                 <div className="glass p-3">
@@ -663,7 +658,6 @@ function App() {
               </div>
             )}
 
-            {/* TAB: HISTORIAL */}
             {tab === 'historial' && (
               <div className="glass p-3">
                 <div className="mb-2 flex items-center gap-2">
@@ -693,7 +687,6 @@ function App() {
             )}
           </div>
 
-          {/* CAJA DEL CONTRATO FLOW */}
           <div className="card p-3 w-full box-border">
             <div className="mb-1.5 flex items-center gap-2">
               <Wallet className="h-4 w-4 text-cyan-300" />
@@ -739,7 +732,6 @@ function App() {
             Soporte por WhatsApp
           </a>
         </footer>
-
       </div>
     </div>
   )
