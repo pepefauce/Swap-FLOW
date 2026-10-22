@@ -48,6 +48,10 @@ VITE_WALLETCONNECT_PROJECT_ID=tu_project_id
 - Wallet Fee (1.3%): `0x2da29b4D5297b261B4899D97Df56AE36F195f26d`
 - WhatsApp: `https://wa.me/message/IJDDVLU7C27GO1`
 
+## Nota importante
+
+Este proyecto se deja en modo pre-lanzamiento mientras el token FLOW no tenga un pair activo en PancakeSwap. La UI de swap queda bloqueada visualmente hasta que exista liquidez real para evitar errores de ejecución de router y transacciones inválidas.
+
 ## Stack incluido
 
 - React
