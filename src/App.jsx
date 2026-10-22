@@ -175,7 +175,6 @@ function App() {
   const { disconnect } = useDisconnect()
   const { writeContract } = useWriteContract()
 
-  // Capturar parámetro ?ref= de la URL o del localStorage al iniciar
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const ref = urlParams.get('ref')
@@ -348,7 +347,6 @@ function App() {
         }, 500)
       }
 
-      // Llamada automatizada a tu Edge Function en Supabase para repartir recompensas y referidos
       try {
         await fetch('https://jsjmgucdcaubbjkeulqg.supabase.co/functions/v1/process-swap-reward', {
           method: 'POST',
@@ -399,20 +397,20 @@ function App() {
   const usdtDisplay = usdtBalance ? Number(formatUnits(usdtBalance.value, 18)).toFixed(2) : '0.00'
 
   return (
-    <div className="min-h-screen bg-bg text-white">
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        <header className="card mb-8 flex flex-wrap items-center justify-between gap-4 p-4">
+    <div className="min-h-screen bg-bg text-white overflow-x-hidden">
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-6">
+        <header className="card mb-6 sm:mb-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 shadow-glow">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 shadow-glow">
               <Coins className="h-6 w-6" />
             </div>
             <div>
-              <div className="text-xl font-bold">Swap FLOW</div>
+              <div className="text-lg sm:text-xl font-bold">Swap FLOW</div>
               <div className="text-xs text-slate-400">BSC real + bonus FLOW</div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-between sm:justify-end">
             <div className={`badge ${isBsc ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/20 bg-amber-500/10 text-amber-300'}`}>
               <ShieldCheck className="h-3.5 w-3.5" />
               {isBsc ? 'BSC Mainnet' : 'Red no compatible'}
@@ -421,25 +419,25 @@ function App() {
             {!isConnected ? (
               <button
                 onClick={handleConnect}
-                className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-2.5 font-semibold text-white shadow-glow transition hover:brightness-110"
+                className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-2.5 font-semibold text-white shadow-glow transition hover:brightness-110 text-center"
               >
                 Conectar wallet
               </button>
             ) : (
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs sm:text-sm">
                   <div className="text-slate-400">BNB</div>
-                  <div className="font-semibold">{tokenBalance} BNB</div>
+                  <div className="font-semibold">{tokenBalance}</div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm">
+                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs sm:text-sm">
                   <div className="text-slate-400">USDT</div>
-                  <div className="font-semibold">{usdtDisplay} USDT</div>
+                  <div className="font-semibold">{usdtDisplay}</div>
                 </div>
 
                 <button
                   onClick={() => disconnect()}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition hover:border-white/20 hover:bg-white/10"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs sm:text-sm transition hover:border-white/20 hover:bg-white/10 truncate max-w-[120px]"
                 >
                   {formatAddress(address)}
                 </button>
@@ -450,14 +448,14 @@ function App() {
 
         <main className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-6">
-            <div className="card p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex gap-2">
+            <div className="card p-3 sm:p-5">
+              <div className="mb-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
                   {['swap', 'referidos', 'historial'].map((name) => (
                     <button
                       key={name}
                       onClick={() => setTab(name)}
-                      className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition ${
+                      className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition whitespace-nowrap ${
                         tab === name ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'
                       }`}
                     >
@@ -465,35 +463,35 @@ function App() {
                     </button>
                   ))}
                 </div>
-                <div className="text-sm text-slate-400">No custodio</div>
+                <div className="text-xs sm:text-sm text-slate-400 text-right sm:text-left">No custodio</div>
               </div>
 
               {tab === 'swap' && (
-                <div className="space-y-5">
-                  <div className="glass p-4">
-                    <div className="mb-4 flex items-center justify-between">
-                      <div className="text-sm text-slate-400">Minero virtual</div>
+                <div className="space-y-4 sm:space-y-5">
+                  <div className="glass p-3 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="text-xs sm:text-sm text-slate-400">Minero virtual</div>
                       <RefreshCcw className="h-4 w-4 text-slate-400" />
                     </div>
 
-                    <div className="miner rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 p-5">
+                    <div className="miner rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 p-4 sm:p-5">
                       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Hashrate</div>
-                      <div className="mt-2 text-4xl font-bold text-cyan-300">{hashRate.toFixed(2)} GH/s</div>
-                      <div className="mt-2 flex items-center gap-2 text-sm text-slate-300">
-                        <Sparkles className="h-4 w-4" />
+                      <div className="mt-2 text-3xl sm:text-4xl font-bold text-cyan-300">{hashRate.toFixed(2)} GH/s</div>
+                      <div className="mt-2 flex items-center gap-2 text-xs sm:text-sm text-slate-300">
+                        <Sparkles className="h-4 w-4 flex-shrink-0" />
                         Procesando flujo de transacción...
                       </div>
                     </div>
                   </div>
 
-                  <div className="glass p-4">
-                    <div className="mb-3 grid gap-3 md:grid-cols-2">
+                  <div className="glass p-3 sm:p-4">
+                    <div className="mb-3 grid gap-3 grid-cols-1 sm:grid-cols-2">
                       <div>
                         <div className="mb-2 text-xs uppercase text-slate-400">Desde</div>
                         <select
                           value={fromToken}
                           onChange={(event) => setFromToken(event.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 outline-none"
+                          className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 outline-none text-sm"
                         >
                           {TOKEN_LIST.map((token) => (
                             <option key={token.symbol} value={token.symbol}>{token.symbol}</option>
@@ -506,7 +504,7 @@ function App() {
                         <select
                           value={toToken}
                           onChange={(event) => setToToken(event.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 outline-none"
+                          className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 outline-none text-sm"
                         >
                           {TOKEN_LIST.map((token) => (
                             <option key={token.symbol} value={token.symbol}>{token.symbol}</option>
@@ -517,21 +515,21 @@ function App() {
 
                     <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-400">Tú pagas</span>
+                        <span className="text-xs sm:text-sm text-slate-400">Tú pagas</span>
                         <span className="text-xs text-slate-400">{fromToken}</span>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <input
                           value={amount}
                           onChange={(event) => setAmount(event.target.value)}
-                          className="w-full bg-transparent text-2xl font-semibold outline-none"
+                          className="w-full bg-transparent text-xl sm:text-2xl font-semibold outline-none min-w-0"
                           placeholder="0.00"
                         />
-                        <div className="rounded-lg bg-slate-800 px-3 py-2 text-sm">{fromToken}</div>
+                        <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs sm:text-sm flex-shrink-0">{fromToken}</div>
                       </div>
                     </div>
 
-                    <div className="mt-4 flex justify-center">
+                    <div className="mt-3 flex justify-center">
                       <button
                         onClick={() => {
                           const currentFrom = fromToken
@@ -544,37 +542,37 @@ function App() {
                       </button>
                     </div>
 
-                    <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                    <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-slate-400">Recibes</span>
+                        <span className="text-xs sm:text-sm text-slate-400">Recibes</span>
                         <span className="text-xs text-slate-400">Ruta real</span>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-3">
-                        <div className="text-2xl font-semibold">{isQuoteLoading ? 'Cargando...' : quote}</div>
-                        <div className="rounded-lg bg-slate-800 px-3 py-2 text-sm">{toToken}</div>
+                        <div className="text-xl sm:text-2xl font-semibold truncate">{isQuoteLoading ? 'Cargando...' : quote}</div>
+                        <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs sm:text-sm flex-shrink-0">{toToken}</div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="glass p-4">
+                  <div className="glass p-3 sm:p-4">
                     <div className="mb-3 flex items-center justify-between">
-                      <span className="text-sm text-slate-400">Fee de wallet</span>
-                      <span className="text-sm font-semibold text-amber-300">{FEE_PERCENT}%</span>
+                      <span className="text-xs sm:text-sm text-slate-400">Fee de wallet</span>
+                      <span className="text-xs sm:text-sm font-semibold text-amber-300">{FEE_PERCENT}%</span>
                     </div>
 
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-slate-200">
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs sm:text-sm text-slate-200">
                       <div className="flex justify-between">
                         <span>Fee estimada</span>
                         <span>{feeValue} {fromToken}</span>
                       </div>
-                      <div className="mt-2 flex justify-between gap-2">
+                      <div className="mt-2 flex flex-col sm:flex-row justify-between gap-1 sm:gap-2">
                         <span>Recaudación</span>
-                        <span className="break-all text-right text-amber-300">{FEE_WALLET}</span>
+                        <span className="break-all text-left sm:text-right text-amber-300">{FEE_WALLET}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-sm text-cyan-100">
+                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs sm:text-sm text-cyan-100">
                     <div className="flex items-center justify-between">
                       <span>Bonus FLOW</span>
                       <span className="font-semibold">{bonusFlow} FLOW</span>
@@ -585,7 +583,7 @@ function App() {
                   <button
                     onClick={handleSwap}
                     disabled={!route || !quoteData || !isConnected || !isBsc}
-                    className={`w-full rounded-xl px-5 py-3 font-bold text-white transition ${
+                    className={`w-full rounded-xl px-5 py-3 font-bold text-sm sm:text-base text-white transition ${
                       route && quoteData && isConnected && isBsc
                         ? 'bg-gradient-to-r from-emerald-600 to-cyan-500 shadow-glow hover:brightness-110'
                         : 'cursor-not-allowed bg-slate-700 opacity-60'
@@ -597,44 +595,44 @@ function App() {
               )}
 
               {tab === 'referidos' && (
-                <div className="space-y-5">
-                  <div className="glass p-4">
+                <div className="space-y-4">
+                  <div className="glass p-3 sm:p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Gift className="h-5 w-5 text-cyan-300" />
-                      <h3 className="text-lg font-semibold">Programa de Referidos</h3>
+                      <h3 className="text-base sm:text-lg font-semibold">Programa de Referidos</h3>
                     </div>
 
-                    <label className="mb-2 block text-sm text-slate-400">Código / Dirección de referencia</label>
+                    <label className="mb-2 block text-xs sm:text-sm text-slate-400">Código / Dirección de referencia</label>
                     <input
                       value={refAddress}
                       onChange={(event) => setRefAddress(event.target.value)}
                       placeholder="0x..."
-                      className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 outline-none transition focus:border-cyan-500"
+                      className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 outline-none transition focus:border-cyan-500 text-sm"
                     />
 
                     <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3">
                       <div className="text-xs uppercase text-slate-400">Link generado</div>
-                      <div className="mt-2 break-all text-sm text-cyan-300">{referralLink}</div>
+                      <div className="mt-2 break-all text-xs sm:text-sm text-cyan-300">{referralLink}</div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-3 gap-3">
-                      <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                        <div className="text-2xl font-bold">14</div>
-                        <div className="text-xs text-slate-400">Usuarios</div>
+                    <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3 text-center">
+                        <div className="text-xl sm:text-2xl font-bold">14</div>
+                        <div className="text-[10px] sm:text-xs text-slate-400">Usuarios</div>
                       </div>
-                      <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                        <div className="text-2xl font-bold">2.4K</div>
-                        <div className="text-xs text-slate-400">FLOW</div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3 text-center">
+                        <div className="text-xl sm:text-2xl font-bold">2.4K</div>
+                        <div className="text-[10px] sm:text-xs text-slate-400">FLOW</div>
                       </div>
-                      <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                        <div className="text-2xl font-bold">8%</div>
-                        <div className="text-xs text-slate-400">Comisión</div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3 text-center">
+                        <div className="text-xl sm:text-2xl font-bold">8%</div>
+                        <div className="text-[10px] sm:text-xs text-slate-400">Comisión</div>
                       </div>
                     </div>
 
                     <button
                       onClick={handleShare}
-                      className="mt-4 w-full rounded-xl bg-gradient-to-r from-pink-600 to-violet-500 px-5 py-3 font-bold text-white transition hover:brightness-110"
+                      className="mt-4 w-full rounded-xl bg-gradient-to-r from-pink-600 to-violet-500 px-5 py-3 font-bold text-sm sm:text-base text-white transition hover:brightness-110"
                     >
                       Compartir link
                     </button>
@@ -644,31 +642,31 @@ function App() {
 
               {tab === 'historial' && (
                 <div className="space-y-4">
-                  <div className="glass p-4">
+                  <div className="glass p-3 sm:p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <History className="h-5 w-5 text-cyan-300" />
-                      <h3 className="text-lg font-semibold">Historial</h3>
+                      <h3 className="text-base sm:text-lg font-semibold">Historial</h3>
                     </div>
 
                     <div className="space-y-3">
                       {history.length === 0 ? (
-                        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
+                        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-xs sm:text-sm text-slate-300">
                           Aún no hay transacciones guardadas localmente.
                         </div>
                       ) : (
                         history.map((tx) => (
                           <div key={tx.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                             <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="font-medium">{tx.type}</div>
-                                <div className="text-xs text-slate-400">{tx.hash}</div>
+                              <div className="min-w-0">
+                                <div className="font-medium text-xs sm:text-sm truncate">{tx.type}</div>
+                                <div className="text-[10px] sm:text-xs text-slate-400 truncate">{tx.hash}</div>
                               </div>
-                              <div className="text-right">
-                                <div className="font-semibold text-emerald-300">{tx.amount}</div>
-                                <div className="text-xs text-slate-400">{tx.status}</div>
+                              <div className="text-right flex-shrink-0">
+                                <div className="font-semibold text-xs sm:text-sm text-emerald-300">{tx.amount}</div>
+                                <div className="text-[10px] sm:text-xs text-slate-400">{tx.status}</div>
                               </div>
                             </div>
-                            <div className="mt-2 flex justify-between text-xs text-slate-500">
+                            <div className="mt-2 flex justify-between text-[10px] sm:text-xs text-slate-500">
                               <span>{tx.time}</span>
                               <span>Bonus {tx.bonusFlow} FLOW</span>
                             </div>
@@ -683,48 +681,48 @@ function App() {
           </section>
 
           <aside className="space-y-6">
-            <div className="card p-4">
+            <div className="card p-3 sm:p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Wallet className="h-5 w-5 text-cyan-300" />
-                <h3 className="text-lg font-semibold">FLOW como bono</h3>
+                <h3 className="text-base sm:text-lg font-semibold">FLOW como bono</h3>
               </div>
 
               <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                 <div className="text-xs uppercase text-slate-400">Contrato de referencia</div>
-                <div className="mt-1 text-xl font-bold">FLOW</div>
-                <div className="mt-2 break-all text-sm text-cyan-300">{FLOW_REWARD_ADDRESS}</div>
+                <div className="mt-1 text-base sm:text-xl font-bold">FLOW</div>
+                <div className="mt-2 break-all text-xs sm:text-sm text-cyan-300">{FLOW_REWARD_ADDRESS}</div>
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <button
                   onClick={() => handleCopy(FLOW_REWARD_ADDRESS)}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs sm:text-sm transition hover:bg-white/10 flex items-center justify-center gap-1 sm:gap-2"
                 >
-                  <span className="flex items-center justify-center gap-2"><Copy className="h-4 w-4" /> Copiar</span>
+                  <Copy className="h-4 w-4" /> Copiar
                 </button>
                 <button
                   onClick={() => window.open(`https://bscscan.com/token/${FLOW_REWARD_ADDRESS}`, '_blank', 'noopener,noreferrer')}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs sm:text-sm transition hover:bg-white/10 flex items-center justify-center gap-1 sm:gap-2"
                 >
-                  <span className="flex items-center justify-center gap-2"><ExternalLink className="h-4 w-4" /> BscScan</span>
+                  <ExternalLink className="h-4 w-4" /> BscScan
                 </button>
               </div>
 
               <button
                 onClick={handleImportToken}
-                className="mt-4 w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-500 px-4 py-3 font-medium transition hover:brightness-110"
+                className="mt-4 w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-500 px-4 py-3 text-xs sm:text-sm font-medium transition hover:brightness-110"
               >
                 Importar FLOW a la wallet
               </button>
             </div>
 
-            <div className="card p-4">
+            <div className="card p-3 sm:p-4">
               <div className="mb-3 flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-emerald-300" />
-                <h3 className="text-lg font-semibold">Estado</h3>
+                <h3 className="text-base sm:text-lg font-semibold">Estado</h3>
               </div>
 
-              <div className="space-y-3 text-sm">
+              <div className="space-y-3 text-xs sm:text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Red</span>
                   <span className="font-medium">BSC Mainnet</span>
@@ -741,38 +739,38 @@ function App() {
                   <span className="text-slate-400">Trust Wallet</span>
                   <span className="font-medium">Disponible</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Ruta</span>
-                  <span className="font-medium text-emerald-300">{route && route.length ? route.join(' → ') : 'No disponible'}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 flex-shrink-0">Ruta</span>
+                  <span className="font-medium text-emerald-300 truncate text-right">{route && route.length ? route.join(' → ') : 'No disponible'}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Recaudación</span>
-                  <span className="font-medium break-all">{FEE_WALLET.slice(0, 8)}...{FEE_WALLET.slice(-6)}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 flex-shrink-0">Recaudación</span>
+                  <span className="font-medium truncate text-right">{FEE_WALLET.slice(0, 6)}...{FEE_WALLET.slice(-4)}</span>
                 </div>
               </div>
             </div>
 
-            <div className="card p-4">
+            <div className="card p-3 sm:p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Users className="h-5 w-5 text-cyan-300" />
-                <h3 className="text-lg font-semibold">Tokens BSC</h3>
+                <h3 className="text-base sm:text-lg font-semibold">Tokens BSC</h3>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {['BNB', 'USDT', 'BUSD', 'USDC', 'ETH', 'BTCB', 'ADA', 'DOGE', 'CAKE', 'LINK', 'XRP', 'SOL', 'LTC'].map((token) => (
-                  <span key={token} className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200">{token}</span>
+                  <span key={token} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] sm:text-xs text-slate-200">{token}</span>
                 ))}
               </div>
             </div>
           </aside>
         </main>
 
-        <footer className="mt-8 flex items-center justify-center py-8 text-sm text-slate-400">
+        <footer className="mt-8 flex items-center justify-center py-4 text-xs sm:text-sm text-slate-400">
           <a
             href="https://wa.me/message/IJDDVLU7C27GO1"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 transition hover:text-white"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 transition hover:text-white"
           >
             <MessageCircle className="h-4 w-4" />
             WhatsApp
