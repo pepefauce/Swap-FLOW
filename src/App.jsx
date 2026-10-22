@@ -18,10 +18,9 @@ import {
   useChainId,
   useConnect,
   useDisconnect,
-  useReadContract,
   useWriteContract
 } from 'wagmi'
-import { formatUnits, parseUnits } from 'viem'
+import { formatUnits, parseUnits, createPublicClient, http } from 'viem'
 import { bsc } from 'wagmi/chains'
 
 const WBNB_ADDRESS = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
@@ -44,6 +43,12 @@ const FEE_PERCENT = 1.3
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jsjmgucdcaubbjkeulqg.supabase.co'
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'Sb_publishable_BjYYJEbbxeZthv1_iwwiwQ_x6RubLpd'
+
+// PUBLIC CLIENT GARANTIZADO CON RPC DIRECTO A LA BSC
+const publicClient = createPublicClient({
+  chain: bsc,
+  transport: http('https://bsc-dataseed1.binance.org')
+})
 
 const TOKEN_LIST = [
   { symbol: 'BNB', address: WBNB_ADDRESS, decimals: 18 },
@@ -123,7 +128,6 @@ const formatAddress = (value) => {
   return `${value.slice(0, 4)}...${value.slice(-4)}`
 }
 
-// CONSTRUCCIÓN DE RUTA DIRECTA Y GARANTIZADA
 const buildRoute = (fromSymbol, toSymbol) => {
   if (fromSymbol === toSymbol) return []
   const fromToken = TOKEN_MAP[fromSymbol]
@@ -133,7 +137,6 @@ const buildRoute = (fromSymbol, toSymbol) => {
   if (fromSymbol === 'BNB') return [WBNB_ADDRESS, toToken.address]
   if (toSymbol === 'BNB') return [fromToken.address, WBNB_ADDRESS]
 
-  // Si no involucra BNB, pasamos por WBNB como puente de liquidez estándar en PancakeSwap V2
   return [fromToken.address, WBNB_ADDRESS, toToken.address]
 }
 
@@ -157,6 +160,11 @@ function App() {
   const [refAddress, setRefAddress] = useState('')
   const [hashRate, setHashRate] = useState(2.74)
   const [history, setHistory] = useState([])
+  
+  // ESTADOS DIRECTOS PARA LA COTIZACIÓN
+  const [quote, setQuote] = useState('0.00')
+  const [rawQuoteData, setRawQuoteData] = useState(null)
+  const [isQuoteLoading, setIsQuoteLoading] = useState(false)
 
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -192,12 +200,10 @@ function App() {
   const { data: bnbBalance } = useBalance({ address, query: { enabled: !!address } })
   const { data: usdtBalance } = useBalance({ address, token: USDT_ADDRESS, query: { enabled: !!address } })
 
-  const isBsc = chainId === bsc.id
   const fromConfig = TOKEN_MAP[fromToken]
   const toConfig = TOKEN_MAP[toToken]
   const route = useMemo(() => buildRoute(fromToken, toToken), [fromToken, toToken])
 
-  // PARSEO SEGURO SIN IMPORTAR SI EL INPUT TIENE TEXTO VACÍO
   const parsedAmountIn = useMemo(() => {
     const num = Number(amount)
     if (!amount || isNaN(num) || num <= 0) return 0n
@@ -208,27 +214,55 @@ function App() {
     }
   }, [amount, fromConfig.decimals])
 
-  // CONSULTA CONTINUA Y SIN BLOQUEOS
-  const { data: quoteData, isLoading: isQuoteLoading } = useReadContract({
-    address: PANCAKE_ROUTER_ADDRESS,
-    abi: PANCAKE_ROUTER_ABI,
-    functionName: 'getAmountsOut',
-    args: [parsedAmountIn, route],
-    query: {
-      enabled: route.length > 0 && parsedAmountIn > 0n,
-      refetchInterval: 3000 // Refresca cada 3s automáticamente
-    }
-  })
+  // LECTURA DIRECTA ON-CHAIN
+  useEffect(() => {
+    let isMounted = true
 
-  const quote = useMemo(() => {
-    if (!quoteData || !Array.isArray(quoteData) || quoteData.length < 2) return '0.00'
-    try {
-      const rawOut = quoteData[quoteData.length - 1]
-      return Number(formatUnits(rawOut, toConfig.decimals)).toFixed(4)
-    } catch {
-      return '0.00'
+    const fetchQuote = async () => {
+      if (!route || route.length === 0 || parsedAmountIn === 0n) {
+        if (isMounted) {
+          setQuote('0.00')
+          setRawQuoteData(null)
+          setIsQuoteLoading(false)
+        }
+        return
+      }
+
+      if (isMounted) setIsQuoteLoading(true)
+
+      try {
+        const amounts = await publicClient.readContract({
+          address: PANCAKE_ROUTER_ADDRESS,
+          abi: PANCAKE_ROUTER_ABI,
+          functionName: 'getAmountsOut',
+          args: [parsedAmountIn, route]
+        })
+
+        if (isMounted && amounts && amounts.length >= 2) {
+          const rawOut = amounts[amounts.length - 1]
+          const formatted = Number(formatUnits(rawOut, toConfig.decimals)).toFixed(4)
+          setQuote(formatted)
+          setRawQuoteData(amounts)
+        }
+      } catch (err) {
+        console.error('Error obteniendo la cotización:', err)
+        if (isMounted) {
+          setQuote('0.00')
+          setRawQuoteData(null)
+        }
+      } finally {
+        if (isMounted) setIsQuoteLoading(false)
+      }
     }
-  }, [quoteData, toConfig.decimals])
+
+    fetchQuote()
+    const timer = setInterval(fetchQuote, 4000)
+
+    return () => {
+      isMounted = false
+      clearInterval(timer)
+    }
+  }, [parsedAmountIn, route, toConfig.decimals])
 
   // CÁLCULO RECOMPENSA: 300 FLOW x 1 USDT
   const bonusFlow = useMemo(() => {
@@ -305,12 +339,12 @@ function App() {
 
   const handleSwap = async () => {
     if (!isConnected) return alert('Conecta tu wallet para continuar.')
-    if (!route || route.length === 0 || !quoteData || quoteData.length < 2) {
+    if (!route || route.length === 0 || !rawQuoteData || rawQuoteData.length < 2) {
       return alert('No hay ruta disponible para esta cotización.')
     }
 
     try {
-      const amountOutMin = (quoteData[quoteData.length - 1] * 990n) / 1000n // Slippage 1%
+      const amountOutMin = (rawQuoteData[rawQuoteData.length - 1] * 990n) / 1000n
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200)
       const cleanBonus = Number(bonusFlow || 0).toFixed(2)
 
@@ -340,7 +374,6 @@ function App() {
         }, 800)
       }
 
-      // Supabase Edge Function
       try {
         await fetch(`${SUPABASE_URL}/functions/v1/process-swap-reward`, {
           method: 'POST',
@@ -460,7 +493,7 @@ function App() {
             {tab === 'swap' && (
               <div className="space-y-3 w-full">
                 
-                {/* MINERO VIRTUAL VISIBLE Y ANIMADO */}
+                {/* MINERO VIRTUAL VISIBLE */}
                 <div className="glass p-3 w-full box-border">
                   <div className="mb-1.5 flex items-center justify-between">
                     <div className="text-[11px] text-slate-400 font-medium">Minero virtual</div>
